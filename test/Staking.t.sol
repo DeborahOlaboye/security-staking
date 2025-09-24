@@ -70,42 +70,57 @@ contract StakingTest is Test {
     }
 
     function test_notify_Rewards() public {
-        // check that it reverts if non owner tried to set duration
-        vm.expectRevert("not authorized");
-        staking.setRewardsDuration(1 weeks);
+    // Test unauthorized access
+    vm.expectRevert("not authorized");
+    staking.setRewardsDuration(1 weeks);
 
-        // simulate owner calls setReward successfully
-        vm.prank(owner);
-        staking.setRewardsDuration(1 weeks);
-        assertEq(staking.duration(), 1 weeks, "duration not updated correctly");
+    // Set duration
+    vm.prank(owner);
+    staking.setRewardsDuration(1 weeks);
+    assertEq(staking.duration(), 1 weeks, "duration not updated correctly");
 
-        // move time forward to ensure we're past any previous reward period
-        vm.warp(block.timestamp + 200);
+    // Fund contract with sufficient tokens
+    deal(address(rewardToken), address(staking), 200 ether);
+    vm.startPrank(owner);
 
-        // Setup reward tokens properly
-        deal(address(rewardToken), owner, 100 ether);
-        vm.startPrank(owner);
-        IERC20(address(rewardToken)).transfer(address(staking), 100 ether);
+    // Case 1: block.timestamp >= finishAt (initial call, finishAt = 0)
+    vm.warp(block.timestamp + 200);
+    uint256 initialTimestamp = block.timestamp;
+    staking.notifyRewardAmount(100 ether);
+    uint256 expectedInitialRate = uint256(100 ether) / uint256(1 weeks);
+    assertEq(staking.rewardRate(), expectedInitialRate, "Reward rate incorrect (initial)");
+    assertEq(staking.finishAt(), initialTimestamp + 1 weeks, "finishAt incorrect (initial)");
+    assertEq(staking.updatedAt(), initialTimestamp, "updatedAt incorrect (initial)");
 
-        // trigger revert for zero reward rate (amount too small)
-        vm.expectRevert("reward rate = 0");
-        staking.notifyRewardAmount(1);
+    // Case 2: block.timestamp < finishAt (during active reward period)
+    vm.warp(block.timestamp + 1 days); // Within reward period
+    uint256 previousFinishAt = staking.finishAt();
+    uint256 previousRewardRate = staking.rewardRate();
+    uint256 remainingTime = previousFinishAt - block.timestamp;
+    uint256 remainingRewards = remainingTime * previousRewardRate;
+    staking.notifyRewardAmount(50 ether);
+    uint256 expectedRewardRate = (50 ether + remainingRewards) / (1 weeks);
+    assertEq(staking.rewardRate(), expectedRewardRate, "Reward rate incorrect (ongoing)");
+    assertEq(staking.finishAt(), block.timestamp + 1 weeks, "finishAt incorrect (ongoing)");
+    assertEq(staking.updatedAt(), block.timestamp, "updatedAt incorrect (ongoing)");
 
-        // trigger second revert - insufficient balance
-        vm.expectRevert("reward amount > balance");
-        staking.notifyRewardAmount(200 ether);
+    // Case 3: Revert on zero reward rate - test after reward period ends
+    vm.warp(block.timestamp + 2 weeks); // Move past reward period
+    vm.expectRevert("reward rate = 0");
+    staking.notifyRewardAmount(0);
 
-        // successful notification
-        staking.notifyRewardAmount(100 ether);
-        assertEq(staking.rewardRate(), uint256(100 ether) / uint256(1 weeks), "Reward rate calculation incorrect");
-        assertEq(staking.finishAt(), uint256(block.timestamp) + uint256(1 weeks), "Finish time incorrect");
-        assertEq(staking.updatedAt(), block.timestamp, "Updated time incorrect");
+    // Case 4: Revert on insufficient balance
+    deal(address(rewardToken), address(staking), 100 ether);
+    vm.expectRevert("reward amount > balance");
+    staking.notifyRewardAmount(200 ether);
 
-        // trigger setRewards distribution revert - cannot change duration while active
-        vm.expectRevert("reward duration not finished");
-        staking.setRewardsDuration(1 weeks);
-        vm.stopPrank();
-    }
+    // Case 5: Revert on setRewardsDuration during active period
+    vm.warp(block.timestamp - 1 weeks); // Go back to active period
+    vm.expectRevert("reward duration not finished");
+    staking.setRewardsDuration(1 weeks);
+
+    vm.stopPrank();
+}
 
     function test_lastTimeRewardApplicable() public {
         // Setup reward tokens first
