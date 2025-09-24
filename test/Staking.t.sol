@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity ^0.8.26;
 
-import  "forge-std/Test.sol";
+import "forge-std/Test.sol";
 import {StakingRewards, IERC20} from "src/StakingRewards.sol";
 import {MockERC20} from "src/MockErc20.sol";
 
@@ -53,7 +53,7 @@ contract StakingTest is Test {
         assertEq(staking.totalSupply(), _totalSupplyBeforeStaking + 5e18, "totalsupply didnt update correctly");
     }
 
-    function  test_cannot_withdraw_amount0() public {
+    function test_cannot_withdraw_amount0() public {
         vm.prank(bob);
         vm.expectRevert("amount = 0");
         staking.withdraw(0);
@@ -67,7 +67,6 @@ contract StakingTest is Test {
         staking.withdraw(2e18);
         assertEq(staking.balanceOf(bob), userStakebefore - 2e18, "Balance didnt update correctly");
         assertLt(staking.totalSupply(), totalSupplyBefore, "total supply didnt update correctly");
-
     }
 
     function test_notify_Rewards() public {
@@ -79,40 +78,41 @@ contract StakingTest is Test {
         vm.prank(owner);
         staking.setRewardsDuration(1 weeks);
         assertEq(staking.duration(), 1 weeks, "duration not updated correctly");
-        
+
         // move time forward to ensure we're past any previous reward period
         vm.warp(block.timestamp + 200);
-        
+
         // Setup reward tokens properly
         deal(address(rewardToken), owner, 100 ether);
-        vm.startPrank(owner); 
+        vm.startPrank(owner);
         IERC20(address(rewardToken)).transfer(address(staking), 100 ether);
-        
+
         // trigger revert for zero reward rate (amount too small)
         vm.expectRevert("reward rate = 0");
         staking.notifyRewardAmount(1);
-    
+
         // trigger second revert - insufficient balance
         vm.expectRevert("reward amount > balance");
         staking.notifyRewardAmount(200 ether);
 
         // successful notification
         staking.notifyRewardAmount(100 ether);
-        assertEq(staking.rewardRate(), uint256(100 ether)/uint256(1 weeks), "Reward rate calculation incorrect");
+        assertEq(staking.rewardRate(), uint256(100 ether) / uint256(1 weeks), "Reward rate calculation incorrect");
         assertEq(staking.finishAt(), uint256(block.timestamp) + uint256(1 weeks), "Finish time incorrect");
         assertEq(staking.updatedAt(), block.timestamp, "Updated time incorrect");
-    
+
         // trigger setRewards distribution revert - cannot change duration while active
         vm.expectRevert("reward duration not finished");
         staking.setRewardsDuration(1 weeks);
         vm.stopPrank();
     }
+
     function test_lastTimeRewardApplicable() public {
         // Setup reward tokens first
         deal(address(rewardToken), owner, 100e18);
         vm.startPrank(owner);
         IERC20(address(rewardToken)).transfer(address(staking), 100e18);
-        
+
         staking.setRewardsDuration(1 weeks);
         staking.notifyRewardAmount(100e18);
         vm.stopPrank();
@@ -135,13 +135,15 @@ contract StakingTest is Test {
         deal(address(rewardToken), owner, 100e18);
         vm.startPrank(owner);
         IERC20(address(rewardToken)).transfer(address(staking), 100e18);
-        
+
         staking.setRewardsDuration(1 weeks);
         staking.notifyRewardAmount(100e18);
         vm.stopPrank();
 
         // Case 1: Zero totalSupply
-        assertEq(staking.rewardPerToken(), staking.rewardPerTokenStored(), "Should return stored value when totalSupply is 0");
+        assertEq(
+            staking.rewardPerToken(), staking.rewardPerTokenStored(), "Should return stored value when totalSupply is 0"
+        );
 
         // Case 2: Non-zero totalSupply - setup staking first
         deal(address(stakingToken), bob, 10e18);
@@ -149,15 +151,15 @@ contract StakingTest is Test {
         IERC20(address(stakingToken)).approve(address(staking), 10e18);
         staking.stake(10e18);
         vm.stopPrank();
-        
+
         uint256 initialRewardPerToken = staking.rewardPerToken();
         vm.warp(block.timestamp + 1 days);
-        
+
         uint256 rewardRate = staking.rewardRate();
         uint256 timeDelta = 1 days;
         uint256 totalSupply = staking.totalSupply();
         uint256 expected = initialRewardPerToken + ((rewardRate * timeDelta * 1e18) / totalSupply);
-        
+
         assertEq(staking.rewardPerToken(), expected, "Reward per token calculation incorrect");
 
         // Case 3: After reward period ends
@@ -172,7 +174,7 @@ contract StakingTest is Test {
         deal(address(rewardToken), owner, 100e18);
         vm.startPrank(owner);
         IERC20(address(rewardToken)).transfer(address(staking), 100e18);
-        
+
         staking.setRewardsDuration(1 weeks);
         staking.notifyRewardAmount(100e18);
         vm.stopPrank();
@@ -183,7 +185,7 @@ contract StakingTest is Test {
         IERC20(address(stakingToken)).approve(address(staking), 10e18);
         staking.stake(10e18);
         vm.stopPrank();
-        
+
         vm.warp(block.timestamp + 1 days);
         uint256 earnedReward = staking.earned(bob);
         assertGt(earnedReward, 0, "Bob should have earned some rewards");
@@ -194,18 +196,17 @@ contract StakingTest is Test {
         IERC20(address(stakingToken)).approve(address(staking), 20e18);
         staking.stake(20e18);
         vm.stopPrank();
-        
+
         vm.warp(block.timestamp + 1 days);
-        
+
         uint256 bobEarned = staking.earned(bob);
         uint256 dsoEarned = staking.earned(dso);
-        
+
         assertGt(bobEarned, 0, "Bob should have earned rewards");
         assertGt(dsoEarned, 0, "Dso should have earned rewards");
-        
+
         // Dso staked 2x more, so should earn proportionally more for the time they were staked
-        // Note: This is a simplified check - actual calculation depends on timing
-        
+
         // Case 3: Zero stake
         assertEq(staking.earned(address(0x123)), 0, "Non-staker should have zero rewards");
     }
@@ -215,7 +216,7 @@ contract StakingTest is Test {
         deal(address(rewardToken), owner, 100e18);
         vm.startPrank(owner);
         IERC20(address(rewardToken)).transfer(address(staking), 100e18);
-        
+
         staking.setRewardsDuration(1 weeks);
         staking.notifyRewardAmount(100e18);
         vm.stopPrank();
@@ -226,7 +227,7 @@ contract StakingTest is Test {
         IERC20(address(stakingToken)).approve(address(staking), 10e18);
         staking.stake(10e18);
         vm.stopPrank();
-        
+
         vm.warp(block.timestamp + 1 days);
         uint256 expectedReward = staking.earned(bob);
         uint256 balanceBefore = rewardToken.balanceOf(bob);
@@ -239,7 +240,7 @@ contract StakingTest is Test {
     }
 
     function test_stake_edge_cases() public {
-        // Case 1: Test with large amounts (but not max to avoid overflow)
+        // Case 1: Test with large amounts
         uint256 largeAmount = 1e30; // Large but safe amount
         deal(address(stakingToken), bob, largeAmount);
         vm.startPrank(bob);
@@ -252,14 +253,14 @@ contract StakingTest is Test {
         deal(address(stakingToken), dso, 2e18);
         vm.startPrank(dso);
         IERC20(address(stakingToken)).approve(address(staking), 1e18);
-        vm.expectRevert(); // Modern OpenZeppelin uses custom errors, not string messages
+        vm.expectRevert();
         staking.stake(2e18);
         vm.stopPrank();
-        
+
         // Case 3: Insufficient balance
         vm.startPrank(dso);
         IERC20(address(stakingToken)).approve(address(staking), 10e18);
-        vm.expectRevert(); // Modern OpenZeppelin uses custom errors, not string messages
+        vm.expectRevert();
         staking.stake(10e18); // dso only has 2e18
         vm.stopPrank();
     }
@@ -327,7 +328,7 @@ contract StakingTest is Test {
 
         // Move to end of first period
         vm.warp(block.timestamp + 1 weeks + 1);
-        
+
         // Start second reward period
         vm.startPrank(owner);
         staking.setRewardsDuration(1 weeks);
@@ -343,26 +344,26 @@ contract StakingTest is Test {
         deal(address(rewardToken), owner, 100e18);
         vm.startPrank(owner);
         IERC20(address(rewardToken)).transfer(address(staking), 100e18);
-        
+
         // Set zero duration first (this is allowed)
         staking.setRewardsDuration(0);
-        
+
         // The revert should happen when trying to notify with zero duration
         vm.expectRevert(); // Should revert due to division by zero in notifyRewardAmount
         staking.notifyRewardAmount(100e18);
         vm.stopPrank();
     }
-    
+
     function test_owner_privilege_escalation() public {
         // Ensure only owner can call privileged functions
         vm.startPrank(bob);
-        
+
         vm.expectRevert("not authorized");
         staking.setRewardsDuration(1 weeks);
-        
+
         vm.expectRevert("not authorized");
         staking.notifyRewardAmount(100e18);
-        
+
         vm.stopPrank();
     }
 
@@ -385,12 +386,11 @@ contract StakingTest is Test {
         // Verify contract has reward tokens before manipulation test
         uint256 contractBalance = rewardToken.balanceOf(address(staking));
         assertGt(contractBalance, 0, "Contract should have reward tokens");
-        
+
         // If someone could drain reward tokens, getReward should handle it gracefully
         vm.warp(block.timestamp + 1 days);
-        
+
         uint256 earnedBefore = staking.earned(bob);
         assertGt(earnedBefore, 0, "Should have earned rewards");
     }
-
 }
